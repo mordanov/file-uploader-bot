@@ -17,7 +17,7 @@ ARCHIVE_API_KEY = os.environ.get("ARCHIVE_API_KEY", "")
 
 
 async def handle_channel_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = update.channel_post
+    msg = update.message
     if not msg:
         return
 
@@ -46,5 +46,5 @@ async def handle_channel_post(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 
 app = ApplicationBuilder().token(BOT_TOKEN).build()
-app.add_handler(MessageHandler(filters.UpdateType.CHANNEL_POSTS, handle_channel_post))
+app.add_handler(MessageHandler(filters.ChatType.GROUPS, handle_channel_post))
 app.run_polling()
