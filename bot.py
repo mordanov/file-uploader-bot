@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 BOT_TOKEN = os.environ["BOT_TOKEN"]
 ARCHIVE_URL = os.environ["ARCHIVE_URL"]
-ARCHIVE_FOLDER = os.environ["ARCHIVE_FOLDER"]
+ARCHIVE_FOLDER_ID = os.environ["ARCHIVE_FOLDER_ID"]
 ARCHIVE_API_KEY = os.environ.get("ARCHIVE_API_KEY", "")
 
 
@@ -37,12 +37,12 @@ async def handle_channel_post(update: Update, context: ContextTypes.DEFAULT_TYPE
     async with aiohttp.ClientSession() as session:
         form = aiohttp.FormData()
         form.add_field("file", bytes(file_bytes), filename=filename)
-        form.add_field("folder", ARCHIVE_FOLDER)
+        form.add_field("folder_id", ARCHIVE_FOLDER_ID)
         async with session.post(ARCHIVE_URL, data=form, headers=headers) as resp:
             if resp.status >= 400:
                 logger.error("Upload failed: %s %s", resp.status, await resp.text())
             else:
-                logger.info("Uploaded %s → %s (HTTP %s)", filename, ARCHIVE_FOLDER, resp.status)
+                logger.info("Uploaded %s → %s (HTTP %s)", filename, ARCHIVE_FOLDER_ID, resp.status)
 
 
 app = ApplicationBuilder().token(BOT_TOKEN).build()
