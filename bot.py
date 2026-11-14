@@ -1,6 +1,7 @@
 import os
 import base64
 import logging
+import mimetypes
 import aiohttp
 from urllib.parse import unquote
 from telegram import Update
@@ -78,9 +79,10 @@ async def handle_channel_post(update: Update, context: ContextTypes.DEFAULT_TYPE
     headers = {"X-API-Key": ARCHIVE_API_KEY} if ARCHIVE_API_KEY else {}
 
     async with aiohttp.ClientSession() as session:
+        content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
         with aiohttp.MultipartWriter("form-data") as mp:
             mp.append(bytes(file_bytes), {
-                "Content-Type": "application/octet-stream",
+                "Content-Type": content_type,
                 "Content-Disposition": f'form-data; name="file"; filename="{filename}"',
             })
             mp.append(ARCHIVE_FOLDER_ID, {
