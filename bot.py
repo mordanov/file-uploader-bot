@@ -56,7 +56,7 @@ MAX_AUDIO_BYTES = 20 * 1024 * 1024  # Bot API download limit
 
 
 async def handle_audio(msg, audio, context: ContextTypes.DEFAULT_TYPE):
-    """Reply with the Spanish transcript and a Russian summary; audio is not archived."""
+    """Reply with the Spanish transcript and a cleaned-up Russian translation; audio is not archived."""
     if not OPENAI_API_KEY:
         await msg.reply_text("⚠️ OPENAI_API_KEY не задан — расшифровка недоступна")
         return
@@ -74,14 +74,14 @@ async def handle_audio(msg, audio, context: ContextTypes.DEFAULT_TYPE):
         if not transcript:
             await msg.reply_text("⚠️ Не удалось распознать речь")
             return
-        summary = await voice.summarize_ru(client, transcript)
+        translation = await voice.translate_ru(client, transcript)
     except Exception as e:
         logger.exception("Audio processing failed")
         await msg.reply_text(f"⚠️ Ошибка обработки аудио: {e}")
         return
 
     logger.info("Transcribed %s (%d chars)", filename, len(transcript))
-    text = f"🇪🇸 Оригинал:\n{transcript}\n\n🇷🇺 Кратко:\n{summary}"
+    text = f"🇪🇸 Оригинал:\n{transcript}\n\n🇷🇺 Перевод:\n{translation}"
     for chunk in voice.split_message(text):
         await msg.reply_text(chunk)
 
