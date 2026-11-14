@@ -1,4 +1,4 @@
-"""Audio message → Spanish transcript + Russian summary via OpenAI."""
+"""Audio message → Spanish transcript + cleaned-up Russian translation via OpenAI."""
 
 AUDIO_EXTENSIONS = (".opus", ".ogg", ".oga", ".m4a", ".mp3", ".wav", ".aac", ".flac", ".webm")
 TELEGRAM_LIMIT = 4096
@@ -48,12 +48,18 @@ def split_message(text: str, limit: int = TELEGRAM_LIMIT) -> list[str]:
     return chunks
 
 
-SUMMARY_PROMPT = (
+TRANSLATE_PROMPT = (
     "Ты получаешь расшифровку голосового сообщения на испанском. "
-    "Кратко перескажи его смысл на русском языке. "
-    "Если сообщение короткое — 1–3 предложения обычным текстом, без списка. "
-    "Если длинное — ключевые пункты списком, затем отдельно действия/просьбы, даты, время, суммы и места, если они есть. "
-    "Не добавляй вступлений и ничего, чего нет в сообщении. Начинай сразу с сути, всё пиши по-русски."
+    "Переведи его на русский язык максимально близко к оригиналу: сохрани порядок мыслей, все факты, "
+    "просьбы, имена, даты, время, суммы и места, а также тон и обращение (ты/вы). "
+    "Убери только повторы, слова-паразиты, оговорки и бессмысленные фразы: "
+    "повтор слов и фраз («во вторник, во вторник» → «во вторник»), "
+    "вставки вроде eh, bueno, o sea, mira, pues, nada, ¿vale?, ¿eh?, ¿sabes? — без русских аналогов; "
+    "при самоисправлении оставь только итоговый вариант («в пять, точнее в пять тридцать» → «в 17:30»). "
+    "Расплывчатые или запутанные места сформулируй ясно, не меняя смысла. "
+    "Не пересказывай, не сокращай содержание, не добавляй ничего от себя и не пиши вступлений. "
+    "Пиши грамотным естественным русским языком, а не калькой с испанского (согласуй род и падежи по-русски). "
+    "Ответ — только текст перевода."
 )
 
 
@@ -67,12 +73,13 @@ async def transcribe(client, data: bytes, filename: str) -> str:
     return resp.text.strip()
 
 
-async def summarize_ru(client, text: str) -> str:
-    """Adaptive-length Russian summary of a transcript."""
+async def translate_ru(client, text: str) -> str:
+    """Russian translation close to the original, cleaned of repetition and filler."""
     resp = await client.chat.completions.create(
-        model="gpt-4o-mini",
+        model="gpt-4.1",
+        temperature=0,
         messages=[
-            {"role": "system", "content": SUMMARY_PROMPT},
+            {"role": "system", "content": TRANSLATE_PROMPT},
             {"role": "user", "content": text},
         ],
     )

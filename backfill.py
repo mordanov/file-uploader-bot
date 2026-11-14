@@ -171,10 +171,19 @@ async def main():
     session = os.environ.get("TELEGRAM_SESSION", "backfill_session")
     client = TelegramClient(session, API_ID, API_HASH)
     await login(client)
+    # Message IDs already uploaded; lets a re-run resume after a crash without duplicates
+    done_path = f"{session}.{group}.done"
+    done = set()
+    if os.path.exists(done_path):
+        with open(done_path) as f:
+            done = {int(line) for line in f if line.strip()}
+        print(f"Skipping {len(done)} already uploaded message(s) listed in {done_path}")
+
     async with client:
         total = ok = 0
+        failed = []
         async for msg in client.iter_messages(group):
-            if not msg.document:
+            if not msg.document or msg.id in done:
                 continue
             attr = next((a for a in msg.document.attributes if isinstance(a, DocumentAttributeFilename)), None)
             if not attr:
@@ -190,7 +199,17 @@ async def main():
             total += 1
             print(f"[msg {msg.id}] {filename}")
 
-            file_bytes = await msg.download_media(bytes)
+            file_bytes = None
+            for attempt in range(1, 4):
+                try:
+                    file_bytes = await msg.download_media(bytes)
+                    break
+                except Exception as e:
+                    print(f"  download attempt {attempt}/3 failed: {e}")
+                    await asyncio.sleep(10 * attempt)
+            if file_bytes is None:
+                failed.append(msg.id)
+                continue
 
             if OPENAI_API_KEY and filename.upper().startswith("DOC") and filename.lower().endswith(".pdf"):
                 extracted = await ocr_name(file_bytes)
@@ -200,8 +219,14 @@ async def main():
 
             if await upload(filename, file_bytes):
                 ok += 1
+                with open(done_path, "a") as f:
+                    f.write(f"{msg.id}\n")
+            else:
+                failed.append(msg.id)
 
         print(f"\nDone: {ok}/{total} PDFs uploaded")
+        if failed:
+            print(f"Failed message IDs (re-run to retry): {failed}")
 
 
 asyncio.run(main())
