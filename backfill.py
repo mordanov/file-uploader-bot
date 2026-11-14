@@ -3,15 +3,11 @@
 One-time backfill: send all PDFs from a Telegram group to the family archive.
 
 Usage:
-    pip install telethon
-    python backfill.py <group_username_or_id>
+    pip install telethon aiohttp python-dotenv
+    python backfill.py [--env /path/to/.env] <group_username_or_id>
 
-Required env (same .env as the bot):
-    TELEGRAM_API_ID, TELEGRAM_API_HASH
-    ARCHIVE_URL, ARCHIVE_FOLDER_ID
-Optional:
-    ARCHIVE_API_KEY
-    OPENAI_API_KEY  — enables OCR rename for files whose name starts with DOC
+On VPS:
+    python backfill.py --env ~/web-folders/.env @your_group
 """
 import asyncio
 import base64
@@ -25,7 +21,13 @@ from dotenv import load_dotenv
 from telethon import TelegramClient
 from telethon.tl.types import DocumentAttributeFilename
 
-load_dotenv()
+# parse optional --env /path/.env before the positional group arg
+_args = sys.argv[1:]
+if len(_args) >= 2 and _args[0] == "--env":
+    load_dotenv(_args[1])
+    sys.argv = [sys.argv[0]] + _args[2:]
+else:
+    load_dotenv()
 
 # On VPS the shared .env uses FILE_UPLOADER_BOT_* prefixes; fall back to bare names for local dev.
 def _e(name, default=""):
