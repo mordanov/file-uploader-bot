@@ -34,13 +34,14 @@ async def ocr_pdf_name(pdf_bytes: bytes) -> str | None:
             messages=[{"role": "user", "content": [
                 {"type": "text", "text": (
                     "What is this document? Reply with ONLY a short filename (no extension, no explanation). "
-                    "Use the document title or its type + key identifier. Max 80 characters. No slashes."
+                    "Use the document title or its type + key identifier. Max 80 characters. No slashes. "
+                    "Keep the original language — do not transliterate."
                 )},
                 {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{base64.b64encode(img_bytes).decode()}"}},
             ]}],
             max_tokens=80,
         )
-        name = resp.choices[0].message.content.strip().strip("\"'")
+        name = unquote(resp.choices[0].message.content.strip().strip("\"'"))
         name = "".join(ch for ch in name if ch not in '/\\\0')
         return name or None
     except Exception as e:
