@@ -43,6 +43,7 @@ async def handle_channel_post(update: Update, context: ContextTypes.DEFAULT_TYPE
                 logger.error("Upload failed: %s %s", resp.status, await resp.text())
             else:
                 logger.info("Uploaded %s → %s (HTTP %s)", filename, ARCHIVE_FOLDER_ID, resp.status)
+                await context.bot.send_message(chat_id=msg.chat_id, text=f"✓ {filename} saved to archive")
 
 
 app = ApplicationBuilder().token(BOT_TOKEN).build()
