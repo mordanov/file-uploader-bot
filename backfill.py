@@ -3,7 +3,7 @@
 One-time backfill: send all PDFs from a Telegram group to the family archive.
 
 Usage:
-    pip install telethon aiohttp python-dotenv
+    pip install telethon aiohttp python-dotenv qrcode
     python backfill.py [--env /path/to/.env] <group_username_or_id>
 
 On VPS:
@@ -19,6 +19,7 @@ from urllib.parse import unquote
 import aiohttp
 from dotenv import load_dotenv
 from telethon import TelegramClient
+from telethon.errors import SessionPasswordNeededError
 from telethon.tl.types import DocumentAttributeFilename
 
 # parse optional --env /path/.env before the positional group arg
@@ -95,6 +96,69 @@ async def upload(filename: str, file_bytes: bytes) -> bool:
             return True
 
 
+_CODE_TYPES = {
+    "SentCodeTypeApp": "Telegram app — open the 'Telegram' service chat (blue checkmark) on a logged-in device",
+    "SentCodeTypeSms": "SMS",
+    "SentCodeTypeCall": "phone call",
+    "SentCodeTypeFlashCall": "flash call (code is the last digits of the calling number)",
+    "SentCodeTypeMissedCall": "missed call (code is the last digits of the calling number)",
+    "SentCodeTypeEmailCode": "your login email",
+    "SentCodeTypeFragmentSms": "Fragment (fragment.com) anonymous number",
+    "SentCodeTypeFirebaseSms": "SMS (Firebase) — usually not delivered to third-party apps",
+}
+
+
+def _describe(code_type) -> str:
+    name = type(code_type).__name__
+    return _CODE_TYPES.get(name, name)
+
+
+async def qr_login(client: TelegramClient):
+    """Login by scanning a QR code in the Telegram app — no login code needed."""
+    import qrcode
+    qr = await client.qr_login()
+    while True:
+        q = qrcode.QRCode(border=1)
+        q.add_data(qr.url)
+        q.print_ascii(invert=True)
+        print("Telegram app → Settings → Devices → Link Desktop Device → scan the QR above")
+        try:
+            await qr.wait(timeout=30)
+            return
+        except asyncio.TimeoutError:
+            print("QR expired, generating a new one...\n")
+            await qr.recreate()
+
+
+async def login(client: TelegramClient):
+    """Interactive login. Defaults to QR; phone-code login reports where Telegram sent the code (start() hides this)."""
+    await client.connect()
+    if await client.is_user_authorized():
+        return
+    phone = input("Phone number in international format (e.g. +4917...), or Enter for QR login: ").strip()
+    if not phone:
+        try:
+            await qr_login(client)
+        except SessionPasswordNeededError:
+            await client.sign_in(password=input("2FA password: "))
+        return
+    sent = await client.send_code_request(phone)
+    while True:
+        print(f"Code sent via: {_describe(sent.type)}")
+        if sent.next_type:
+            print(f"  (type 'r' to resend via: {_describe(sent.next_type)}"
+                  + (f", available after {sent.timeout}s)" if sent.timeout else ")"))
+        code = input("Enter code: ").strip()
+        if code.lower() == "r":
+            sent = await client.send_code_request(phone)  # Telethon issues ResendCodeRequest on repeat
+            continue
+        break
+    try:
+        await client.sign_in(phone, code)
+    except SessionPasswordNeededError:
+        await client.sign_in(password=input("2FA password: "))
+
+
 async def main():
     if len(sys.argv) < 2:
         sys.exit("Usage: python backfill.py <group_username_or_id>")
@@ -105,17 +169,25 @@ async def main():
         pass
 
     session = os.environ.get("TELEGRAM_SESSION", "backfill_session")
-    async with TelegramClient(session, API_ID, API_HASH) as client:
+    client = TelegramClient(session, API_ID, API_HASH)
+    await login(client)
+    async with client:
         total = ok = 0
         async for msg in client.iter_messages(group):
             if not msg.document:
                 continue
             attr = next((a for a in msg.document.attributes if isinstance(a, DocumentAttributeFilename)), None)
-            if not attr or not attr.file_name.lower().endswith(".pdf"):
+            if not attr:
+                continue
+            filename = attr.file_name
+            # Files without an extension (e.g. WhatsApp "DOC-...-WA0001.") are assumed to be PDFs
+            stem, dot, ext = filename.rpartition(".")
+            if not dot or not ext:
+                filename = (stem or ext) + ".pdf"
+            elif ext.lower() != "pdf":
                 continue
 
             total += 1
-            filename = attr.file_name
             print(f"[msg {msg.id}] {filename}")
 
             file_bytes = await msg.download_media(bytes)
