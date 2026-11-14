@@ -79,7 +79,11 @@ async def handle_channel_post(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     async with aiohttp.ClientSession() as session:
         form = aiohttp.FormData()
-        form.add_field("file", bytes(file_bytes), filename=filename)
+        form.add_field(
+            "file", bytes(file_bytes),
+            content_type="application/octet-stream",
+            headers={"Content-Disposition": f'form-data; name="file"; filename="{filename}"'},
+        )
         form.add_field("folder_id", ARCHIVE_FOLDER_ID)
         async with session.post(ARCHIVE_URL, data=form, headers=headers) as resp:
             if resp.status >= 400:
