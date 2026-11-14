@@ -48,11 +48,32 @@ def split_message(text: str, limit: int = TELEGRAM_LIMIT) -> list[str]:
     return chunks
 
 
+SUMMARY_PROMPT = (
+    "Ты получаешь расшифровку голосового сообщения на испанском. "
+    "Кратко перескажи его смысл на русском языке. "
+    "Если сообщение короткое — 1–3 предложения. "
+    "Если длинное — ключевые пункты списком, затем отдельно действия/просьбы, даты, время, суммы и места, если они есть. "
+    "Не добавляй вступлений и ничего, чего нет в сообщении."
+)
+
+
 async def transcribe(client, data: bytes, filename: str) -> str:
     """Spanish speech-to-text."""
-    raise NotImplementedError
+    resp = await client.audio.transcriptions.create(
+        model="gpt-4o-transcribe",
+        file=(openai_filename(filename), data),
+        language="es",
+    )
+    return resp.text.strip()
 
 
 async def summarize_ru(client, text: str) -> str:
     """Adaptive-length Russian summary of a transcript."""
-    raise NotImplementedError
+    resp = await client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": SUMMARY_PROMPT},
+            {"role": "user", "content": text},
+        ],
+    )
+    return resp.choices[0].message.content.strip()
