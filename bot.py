@@ -8,6 +8,8 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
 from dotenv import load_dotenv
 
+import voice
+
 load_dotenv()
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -50,12 +52,51 @@ async def ocr_pdf_name(pdf_bytes: bytes) -> str | None:
         return None
 
 
+MAX_AUDIO_BYTES = 20 * 1024 * 1024  # Bot API download limit
+
+
+async def handle_audio(msg, audio, context: ContextTypes.DEFAULT_TYPE):
+    """Reply with the Spanish transcript and a Russian summary; audio is not archived."""
+    if not OPENAI_API_KEY:
+        await msg.reply_text("⚠️ OPENAI_API_KEY не задан — расшифровка недоступна")
+        return
+    if (audio.file_size or 0) > MAX_AUDIO_BYTES:
+        await msg.reply_text("⚠️ Файл больше 20 МБ — Telegram не даёт боту его скачать")
+        return
+    try:
+        tg_file = await context.bot.get_file(audio.file_id)
+        data = bytes(await tg_file.download_as_bytearray())
+        filename = getattr(audio, "file_name", None) or tg_file.file_path.split("/")[-1]
+
+        from openai import AsyncOpenAI
+        client = AsyncOpenAI(api_key=OPENAI_API_KEY)
+        transcript = await voice.transcribe(client, data, filename)
+        if not transcript:
+            await msg.reply_text("⚠️ Не удалось распознать речь")
+            return
+        summary = await voice.summarize_ru(client, transcript)
+    except Exception as e:
+        logger.exception("Audio processing failed")
+        await msg.reply_text(f"⚠️ Ошибка обработки аудио: {e}")
+        return
+
+    logger.info("Transcribed %s (%d chars)", filename, len(transcript))
+    text = f"🇪🇸 Оригинал:\n{transcript}\n\n🇷🇺 Кратко:\n{summary}"
+    for chunk in voice.split_message(text):
+        await msg.reply_text(chunk)
+
+
 async def handle_channel_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
     if not msg:
         return
 
-    file_obj = msg.document or msg.video or msg.audio or msg.voice
+    audio = voice.audio_attachment(msg)
+    if audio:
+        await handle_audio(msg, audio, context)
+        return
+
+    file_obj = msg.document or msg.video
     if msg.photo:
         file_obj = msg.photo[-1]  # largest size
 
