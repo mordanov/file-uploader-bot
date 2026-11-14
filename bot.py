@@ -78,14 +78,15 @@ async def handle_channel_post(update: Update, context: ContextTypes.DEFAULT_TYPE
     headers = {"X-API-Key": ARCHIVE_API_KEY} if ARCHIVE_API_KEY else {}
 
     async with aiohttp.ClientSession() as session:
-        form = aiohttp.FormData()
-        form.add_field(
-            "file", bytes(file_bytes),
-            content_type="application/octet-stream",
-            headers={"Content-Disposition": f'form-data; name="file"; filename="{filename}"'},
-        )
-        form.add_field("folder_id", ARCHIVE_FOLDER_ID)
-        async with session.post(ARCHIVE_URL, data=form, headers=headers) as resp:
+        with aiohttp.MultipartWriter("form-data") as mp:
+            mp.append(bytes(file_bytes), {
+                "Content-Type": "application/octet-stream",
+                "Content-Disposition": f'form-data; name="file"; filename="{filename}"',
+            })
+            mp.append(ARCHIVE_FOLDER_ID, {
+                "Content-Disposition": 'form-data; name="folder_id"',
+            })
+        async with session.post(ARCHIVE_URL, data=mp, headers=headers) as resp:
             if resp.status >= 400:
                 logger.error("Upload failed: %s %s", resp.status, await resp.text())
             else:
