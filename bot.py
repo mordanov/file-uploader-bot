@@ -70,6 +70,10 @@ async def handle_channel_post(update: Update, context: ContextTypes.DEFAULT_TYPE
             logger.info("OCR renamed %s → %s", filename, extracted)
             filename = extracted + ".pdf"
 
+    if len(filename) > 255:
+        ext = filename[filename.rfind("."):] if "." in filename else ""
+        filename = filename[:255 - len(ext)] + ext
+
     headers = {"X-API-Key": ARCHIVE_API_KEY} if ARCHIVE_API_KEY else {}
 
     async with aiohttp.ClientSession() as session:
