@@ -8,7 +8,8 @@ the bot replies with the Spanish transcript and a Russian summary. Audio is **no
 A group message is an *audio message* if it has:
 - `voice` (Telegram voice note), or
 - `audio` (audio file, e.g. WhatsApp `PTT-….opus` shared to Telegram), or
-- `document` whose `mime_type` starts with `audio/`.
+- `document` whose `mime_type` starts with `audio/` or whose filename has an audio extension
+  (`.opus .ogg .oga .m4a .mp3 .wav .aac .flac .webm`).
 
 All other files (documents, photos, videos) keep the existing archive-upload behavior.
 
@@ -35,8 +36,8 @@ Reply `⚠️ <reason>` and log, never archive, when:
 - any OpenAI call fails.
 
 ## Structure
-- `voice.py`: `is_audio(msg)`, `transcribe(data, filename) -> str`, `summarize_ru(text) -> str`,
-  `split_message(text, limit=4096) -> list[str]`.
+- `voice.py`: `audio_attachment(msg)`, `openai_filename(name) -> str`, `transcribe(client, data, filename) -> str`,
+  `summarize_ru(client, text) -> str`, `split_message(text, limit=4096) -> list[str]`.
 - `bot.py`: routes audio messages to `voice.py`, everything else to the existing upload path.
 
 ## Testing
