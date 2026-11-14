@@ -104,7 +104,8 @@ async def main():
     except ValueError:
         pass
 
-    async with TelegramClient("backfill_session", API_ID, API_HASH) as client:
+    session = os.environ.get("TELEGRAM_SESSION", "backfill_session")
+    async with TelegramClient(session, API_ID, API_HASH) as client:
         total = ok = 0
         async for msg in client.iter_messages(group):
             if not msg.document:
